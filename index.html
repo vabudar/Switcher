@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATEM Switcher Practice - Pro (Video Version)</title>
+    <title>ATEM Switcher Practice </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Tinos:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -13,6 +13,9 @@
         }
         .font-serif {
             font-family: 'Tinos', serif;
+        }
+        #loading-bar {
+            transition: width 0.3s ease-in-out;
         }
         .monitor-window {
             background-color: #000; /* Ensure a black background for monitors */
@@ -219,7 +222,20 @@
 </head>
 <body class="text-white flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-screen-2xl grid grid-cols-12 grid-rows-2 gap-4">
+    <div id="video-cache" class="hidden"></div>
+
+    <!-- Start Page -->
+    <div id="start-page" class="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center z-50">
+        <h1 class="text-5xl font-bold mb-4">ATEM Switcher Practice</h1>
+        <p class="text-xl text-gray-400 mb-8">Pro Video Version</p>
+        <button id="start-btn" class="relative overflow-hidden bg-blue-600 text-white font-bold py-3 px-8 rounded-lg text-2xl transition-all transform hover:scale-105 disabled:opacity-75 disabled:cursor-not-allowed">
+            <div id="loading-bar" class="absolute top-0 left-0 h-full bg-blue-800" style="width: 0%; transition: width 0.3s ease-in-out;"></div>
+            <span id="start-btn-text" class="relative z-10">Begin</span>
+        </button>
+    </div>
+
+    <!-- Main Application Wrapper -->
+    <div id="main-app" class="w-full max-w-screen-2xl grid grid-cols-12 grid-rows-2 gap-4 hidden">
         <!-- PGM/PVW Monitors -->
         <div class="col-span-12 lg:col-span-12">
             <div class="grid grid-cols-2 gap-4">
@@ -328,7 +344,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             // --- Data Setup ---
             const BLACK_SOURCE_ID = 100;
-            const SLIDE_SOURCE_ID = 7; // 'MAC 1' is now the slide deck
+            const SLIDE_SOURCE_ID = 7;
              const slides = [
                  { 
                      type: 'title',
@@ -353,7 +369,6 @@
                  }
              ];
             
-            // --- MODIFIED: Using videoUrl instead of imageUrl ---
             const baseSources = [
                 { id: 1, name: 'CAM 1', videoUrl: 'https://pub-adee94ef285448cb92694e533292bcb9.r2.dev/CAM%201.mp4' }, 
                 { id: 2, name: 'CAM 2', videoUrl: 'https://pub-adee94ef285448cb92694e533292bcb9.r2.dev/Congregation%20Shot.mp4' }, 
@@ -379,8 +394,16 @@
                 dsk2: { onAir: false, source: SLIDE_SOURCE_ID, tieTarget: null }
             };
 
-            // --- Element Caching ---
+            // --- Caching, Elements, and State Flags ---
+            const videoCache = {};
+            let hasUserInteracted = false;
             const elements = {
+                startPage: document.getElementById('start-page'),
+                startButton: document.getElementById('start-btn'),
+                startButtonText: document.getElementById('start-btn-text'),
+                loadingBar: document.getElementById('loading-bar'),
+                mainApp: document.getElementById('main-app'),
+                videoCache: document.getElementById('video-cache'),
                 previewBus: document.getElementById('preview-bus'),
                 programBus: document.getElementById('program-bus'),
                 previewMonitor: document.getElementById('preview-monitor'),
@@ -403,6 +426,25 @@
 
             // --- Initialization ---
             function initialize() {
+                elements.startButton.disabled = true;
+                elements.startButtonText.textContent = 'Loading, Please Wait...';
+                
+                preloadVideos();
+
+                elements.startButton.addEventListener('click', () => {
+                    hasUserInteracted = true;
+                    elements.startPage.classList.add('hidden');
+                    elements.mainApp.classList.remove('hidden');
+                    console.log("User interaction detected. Enabling video playback.");
+                    
+                    // Start playing all cached videos now that we have user permission
+                    Object.values(videoCache).forEach(video => {
+                        video.play().catch(e => console.error("Could not start cached video:", e));
+                    });
+
+                    updateUI();
+                });
+
                 buttonSources.forEach(source => {
                     elements.previewBus.appendChild(createButton(source, 'pvw'));
                     elements.programBus.appendChild(createButton(source, 'pgm'));
@@ -415,14 +457,9 @@
                 elements.nextSlideBtn.addEventListener('click', nextSlide);
                 
                 document.addEventListener('keydown', (e) => {
-                    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
-                        return;
-                    }
-                    if (e.key === 'ArrowLeft') {
-                        prevSlide();
-                    } else if (e.key === 'ArrowRight') {
-                        nextSlide();
-                    }
+                    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+                    if (e.key === 'ArrowLeft') prevSlide();
+                    if (e.key === 'ArrowRight') nextSlide();
                 });
 
                 elements.transitionStyleBus.querySelectorAll('.btn-trans-style').forEach(btn => {
@@ -438,6 +475,64 @@
                 updateUI();
             }
 
+            function enableStartButton() {
+                elements.startButton.disabled = false;
+                elements.startButtonText.textContent = 'Begin';
+                elements.startButton.classList.remove('bg-blue-600');
+                elements.startButton.classList.add('bg-green-600');
+                elements.loadingBar.classList.remove('bg-blue-800');
+                elements.loadingBar.classList.add('bg-green-800');
+                console.log("All videos loaded. Application ready.");
+            }
+
+            function preloadVideos() {
+                const videoSources = baseSources.filter(source => source.videoUrl);
+                if (videoSources.length === 0) {
+                    enableStartButton();
+                    return;
+                }
+
+                const videoProgress = new Array(videoSources.length).fill(0);
+
+                const updateProgress = () => {
+                    const totalProgress = videoProgress.reduce((sum, progress) => sum + progress, 0);
+                    const averageProgress = (totalProgress / videoSources.length) * 100;
+                    elements.loadingBar.style.width = `${averageProgress}%`;
+                };
+
+                let videosReady = 0;
+                const onVideoCanPlayThrough = () => {
+                    videosReady++;
+                    if (videosReady === videoSources.length) {
+                        elements.loadingBar.style.width = '100%';
+                        enableStartButton();
+                    }
+                };
+
+                videoSources.forEach((source, index) => {
+                    const video = document.createElement('video');
+                    video.src = source.videoUrl;
+                    video.preload = 'auto';
+                    video.muted = true;
+                    video.loop = true;
+                    video.playsInline = true;
+                    video.id = `video-cache-${source.id}`;
+                    
+                    video.addEventListener('progress', () => {
+                        if (video.duration > 0 && video.buffered.length > 0) {
+                            const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                            const progress = bufferedEnd / video.duration;
+                            videoProgress[index] = progress;
+                            updateProgress();
+                        }
+                    });
+
+                    video.addEventListener('canplaythrough', onVideoCanPlayThrough, { once: true });
+                    videoCache[source.id] = video;
+                    elements.videoCache.appendChild(video);
+                });
+            }
+
             function createButton(source, busType) {
                 const btn = document.createElement('button');
                 btn.dataset.sourceId = source.id;
@@ -451,10 +546,8 @@
                 return btn;
             }
 
-            // --- Slide Rendering ---
             function getSlideHTML(slideIndex, isOverlay = false) {
                 const slide = slides[slideIndex];
-                
                 const titleSize = isOverlay ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl';
                 const subtitleSize = isOverlay ? 'text-lg md:text-xl' : 'text-base md:text-m';
                 const lyricSize = isOverlay ? 'text-3xl md:text-4xl' : 'text-2xl md:text-3xl';
@@ -476,7 +569,6 @@
                 return '';
             }
 
-            // --- Core Logic Functions ---
             function selectPreview(sourceId) {
                 if (state.isTransitioning || state.isFadedToBlack) return;
                 state.preview = (sourceId === state.program) ? null : sourceId;
@@ -621,7 +713,6 @@
                 updateUI();
             }
 
-            // --- MODIFIED: This function now calls a targeted update function ---
             function toggleDskTie(dskNumber) {
                 const dskToUpdate = (dskNumber === 1) ? state.dsk1 : state.dsk2;
                 const otherDsk = (dskNumber === 1) ? state.dsk2 : state.dsk1;
@@ -640,7 +731,6 @@
                 updateDskOverlaysAndButtons();
             }
 
-            // --- MODIFIED: This function now calls a targeted update function ---
             function toggleDskOnAir(dskNumber) {
                 const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
                 dsk.onAir = !dsk.onAir;
@@ -697,7 +787,6 @@
                 }
             }
             
-            // --- UI Update & Helper Functions ---
             function getSourceDetails(sourceId) {
                 return monitorSources.find(s => s.id === sourceId);
             }
@@ -705,22 +794,31 @@
             function updateElementContent(element, source) {
                 if (!element || !source) return;
                 
-                const contentArea = element.querySelector('.monitor-content-area') || element;
+                let contentArea = element.querySelector('.monitor-content-area');
+                if (!contentArea) {
+                    contentArea = element;
+                }
+                const currentContent = contentArea.firstChild;
+
+                // If there's a video currently in the monitor, return it to the cache
+                if (currentContent && currentContent.tagName === 'VIDEO') {
+                    elements.videoCache.appendChild(currentContent);
+                }
                 
-                contentArea.innerHTML = ''; 
-                element.style.backgroundImage = 'none';
+                // Clear any old non-video content
+                contentArea.innerHTML = '';
 
                 if (source.id === SLIDE_SOURCE_ID) {
                     contentArea.innerHTML = getSlideHTML(state.slideIndex, false);
                 } else if (source.videoUrl) {
-                    const video = document.createElement('video');
-                    video.src = source.videoUrl;
-                    video.autoplay = true;
-                    video.loop = true;
-                    video.muted = true;
-                    video.playsInline = true;
-                    video.className = 'w-full h-full object-cover';
-                    contentArea.appendChild(video);
+                    if (hasUserInteracted) {
+                        const videoToDisplay = videoCache[source.id];
+                        if (videoToDisplay) {
+                            contentArea.appendChild(videoToDisplay);
+                        }
+                    } else {
+                        contentArea.innerHTML = `<p class="text-5xl font-bold">${source.name}</p>`;
+                    }
                 } else {
                     if (source.name && source.id !== BLACK_SOURCE_ID) {
                         contentArea.innerHTML = `<p class="text-5xl font-bold">${source.name}</p>`;
@@ -758,8 +856,6 @@
                 updateDskOverlaysAndButtons();
             }
 
-            // --- NEW FUNCTION ---
-            // This function specifically updates only the DSK overlays and buttons
             function updateDskOverlaysAndButtons() {
                 [1, 2].forEach(dskNum => {
                     const dsk = dskNum === 1 ? state.dsk1 : state.dsk2;
@@ -767,9 +863,7 @@
                     const onAirBtn = dskNum === 1 ? elements.dsk1OnAirBtn : elements.dsk2OnAirBtn;
                     const autoBtn = dskNum === 1 ? elements.dsk1AutoBtn : elements.dsk2AutoBtn;
 
-                    if (autoBtn.classList.contains('active')) {
-                        return;
-                    }
+                    if (autoBtn.classList.contains('active')) return;
 
                     elements.programMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
                     elements.previewMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
@@ -794,7 +888,6 @@
                 });
             }
 
-            // --- MODIFIED: This function now calls the targeted DSK update function ---
             function updateUI() {
                 if (state.isTransitioning) return;
                 
