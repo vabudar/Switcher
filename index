@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATEM Switcher Practice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Tinos:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #1a1a1a;
+        }
+        .font-serif {
+            font-family: 'Tinos', serif;
+        }
+        .monitor-window {
+            background-color: #000; /* Ensure a black background for monitors */
+            position: relative;
+            overflow: hidden;
+        }
+        .monitor-content-area {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* --- RULE TO TARGET SLIDES MONITOR --- */
+        #slide-deck-monitor .monitor-content-area {
+            align-items: flex-end; /* Pushes content to the bottom */
+        }
+        .transition-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden; /* Ensure video in overlay doesn't spill out */
+        }
+        .control-panel {
+            background-color: #2c2c2c;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+        }
+        .panel-title {
+            color: #ccc;
+            margin-bottom: 8px;
+            font-weight: 500;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        .bus-btn {
+            background-color: #4a4a4a;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            border-radius: 3px;
+            font-weight: 500;
+            transition: all 0.1s ease-in-out;
+            padding: 8px 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .bus-btn:hover {
+            background-color: #5a5a5a;
+        }
+        .btn-pgm {
+            background-color: #d92525;
+            color: white;
+            box-shadow: 0 0 10px 2px rgba(217, 37, 37, 0.6);
+        }
+        .btn-pvw {
+            background-color: #1a9c46;
+            color: white;
+            box-shadow: 0 0 10px 2px rgba(26, 156, 70, 0.6);
+        }
+        .btn-trans-style {
+            background-color: #4a4a4a;
+        }
+        .btn-trans-style.active {
+            background-color: #d4a01a;
+            color: black;
+            font-weight: 700;
+            box-shadow: 0 0 10px 2px rgba(212, 160, 26, 0.6);
+        }
+        .transition-main-btn {
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+        .t-bar-track {
+            width: 10px;
+            height: 120px;
+            background: #222;
+            border-radius: 5px;
+            position: relative;
+            border: 1px solid #555;
+        }
+        .t-bar-handle {
+            width: 40px;
+            height: 14px;
+            background: #888;
+            border-radius: 3px;
+            position: absolute;
+            left: -15px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+        }
+        #ftb-btn.active {
+            background-color: #d92525;
+            color: white;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(217, 37, 37, 0.7); }
+            70% { box-shadow: 0 0 10px 8px rgba(217, 37, 37, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(217, 37, 37, 0); }
+        }
+        .dsk-overlay {
+            position: absolute;
+            z-index: 10;
+            opacity: 0;
+            color: white;
+            pointer-events: none;
+        }
+        .dsk1-overlay-style {
+            bottom: 10%;
+            left: 0;
+            width: 100%;
+            height: 23%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.75);
+            font-family: 'Tinos', serif;
+            text-shadow: 1px 1px 3px #000;
+            overflow: hidden;
+        }
+        .dsk2-overlay-style {
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+        .monitor-label {
+            z-index: 20;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            position: absolute;
+            top: 0.5rem;
+            left: 0.5rem;
+        }
+        .dsk-hw-btn {
+            width: 65px;
+            height: 65px;
+            background: linear-gradient(to bottom, #e8e8e8, #b0b0b0);
+            border: 2px solid #333;
+            border-top-color: #555;
+            border-left-color: #555;
+            border-radius: 8px;
+            color: #1a1a1a;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+            box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.4), 0 2px 2px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s ease-in-out;
+        }
+        .dsk-hw-btn:active {
+            background: linear-gradient(to top, #e8e8e8, #b0b0b0);
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+            transform: translateY(1px);
+        }
+        .dsk-rate-display {
+            background-color: #111;
+            color: #ff9900;
+            font-family: 'Roboto', monospace;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            text-align: center;
+            width: 65px;
+            font-size: 0.9rem;
+        }
+        .dsk-hw-btn.btn-dsk-tie.active-pgm {
+            background: linear-gradient(to bottom, #56f08b, #1a9c46);
+            color: white;
+            text-shadow: 0 0 2px black;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.6), 0 0 15px rgba(26, 156, 70, 0.8);
+        }
+        .dsk-hw-btn.btn-dsk-tie.active-pvw {
+            background: linear-gradient(to bottom, #63a4ff, #2563eb);
+            color: white;
+            text-shadow: 0 0 2px black;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.6), 0 0 15px rgba(37, 99, 235, 0.8);
+        }
+        .dsk-hw-btn.btn-dsk-onair.active {
+              background: linear-gradient(to bottom, #ff6b6b, #d92525);
+              color: white;
+              text-shadow: 0 0 2px black;
+              box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.6), 0 0 15px rgba(217, 37, 37, 0.8);
+        }
+        .dsk-hw-btn.btn-dsk-auto.active {
+              background: linear-gradient(to bottom, #ffd163, #d4a01a);
+              color: black;
+              text-shadow: none;
+              box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.6), 0 0 15px rgba(212, 160, 26, 0.8);
+        }
+    </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-screen-2xl grid grid-cols-12 grid-rows-2 gap-4">
+        <!-- PGM/PVW Monitors -->
+        <div class="col-span-12 lg:col-span-12">
+            <div class="grid grid-cols-2 gap-4">
+                 <div id="preview-monitor" class="monitor-window w-full aspect-video rounded-md border-2 border-green-600">
+                     <h2 class="monitor-label text-xl font-semibold text-green-500">PREVIEW</h2>
+                     <div class="monitor-content-area"></div>
+                 </div>
+                <div id="program-monitor" class="monitor-window w-full aspect-video rounded-md border-2 border-red-600">
+                   <h2 class="monitor-label text-xl font-semibold text-red-500">PROGRAM</h2>
+                   <div class="monitor-content-area"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Main Control Surface -->
+        <div class="col-span-12 lg:col-span-7 lg:row-span-2 control-panel">
+            <div class="grid grid-cols-12 gap-2">
+                <!-- Program/Preview Busses -->
+                <div class="col-span-6 space-y-2">
+                    <div class="control-panel bg-gray-800/50">
+                        <p class="panel-title">Program</p>
+                        <div id="program-bus" class="grid grid-cols-8 gap-2"></div>
+                    </div>
+                    <div class="control-panel bg-gray-800/50">
+                        <p class="panel-title">Preview</p>
+                        <div id="preview-bus" class="grid grid-cols-8 gap-2"></div>
+                    </div>
+                </div>
+
+                <!-- Transition & DSK Column -->
+                <div class="col-span-6 grid grid-cols-4 gap-2">
+                    <!-- Next Transition & Style -->
+                    <div class="col-span-1 space-y-2">
+                        <div class="control-panel bg-gray-800/50">
+                            <p class="panel-title">Next Transition</p>
+                            <div class="space-y-2">
+                                <button class="w-full bus-btn btn-pvw">BKGD</button>
+                                <button class="w-full bus-btn">KEY 1</button>
+                            </div>
+                        </div>
+                        <div class="control-panel bg-gray-800/50">
+                             <p class="panel-title">Transition Style</p>
+                             <div id="transition-style-bus" class="grid grid-cols-2 gap-1">
+                                   <button data-style="mix" class="bus-btn btn-trans-style active">MIX</button>
+                                   <button data-style="dip" class="bus-btn btn-trans-style">DIP</button>
+                                   <button data-style="wipe" class="bus-btn btn-trans-style">WIPE</button>
+                                   <button data-style="sting" class="bus-btn btn-trans-style">STING</button>
+                             </div>
+                        </div>
+                    </div>
+                    <!-- T-Bar & Main Transitions -->
+                    <div class="col-span-1 flex flex-col items-center justify-between control-panel bg-gray-800/50 py-2">
+                         <div class="flex flex-col items-center space-y-2">
+                             <button id="cut-btn" class="transition-main-btn bg-gray-600 w-full">CUT</button>
+                             <button id="auto-btn" class="transition-main-btn bg-gray-600 w-full">AUTO</button>
+                         </div>
+                         <div id="t-bar" class="t-bar-track">
+                             <div id="t-bar-handle" class="t-bar-handle" style="bottom: 0px;"></div>
+                         </div>
+                    </div>
+                    <!-- DSKs & FTB -->
+                    <div class="col-span-2 space-y-2">
+                        <div class="control-panel bg-gray-800/50 p-2">
+                            <div class="flex justify-around space-x-2">
+                                <!-- DSK 1 Column -->
+                                <div class="flex flex-col items-center space-y-2">
+                                    <p class="panel-title text-center">DSK 1</p>
+                                    <button id="dsk1-tie-btn" class="dsk-hw-btn btn-dsk-tie">TIE</button>
+                                    <div class="text-xs text-gray-400 -mb-1">Rate</div>
+                                    <div class="dsk-rate-display">0:30</div>
+                                    <button id="dsk1-onair-btn" class="dsk-hw-btn btn-dsk-onair">ON AIR</button>
+                                    <button id="dsk1-auto-btn" class="dsk-hw-btn btn-dsk-auto">AUTO</button>
+                                </div>
+                                <!-- DSK 2 Column -->
+                                <div class="flex flex-col items-center space-y-2">
+                                    <p class="panel-title text-center">DSK 2</p>
+                                    <button id="dsk2-tie-btn" class="dsk-hw-btn btn-dsk-tie">TIE</button>
+                                    <div class="text-xs text-gray-400 -mb-1">Rate</div>
+                                    <div class="dsk-rate-display">0:30</div>
+                                    <button id="dsk2-onair-btn" class="dsk-hw-btn btn-dsk-onair">ON AIR</button>
+                                    <button id="dsk2-auto-btn" class="dsk-hw-btn btn-dsk-auto">AUTO</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-panel bg-gray-800/50">
+                            <p class="panel-title text-center">Fade to Black</p>
+                            <button id="ftb-btn" class="w-full transition-main-btn bg-gray-800">FTB</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide Deck Monitor -->
+        <div class="col-span-12 lg:col-span-5">
+            <div id="slide-deck-monitor" class="monitor-window bg-black rounded-md border-2 border-blue-500 relative aspect-video">
+                 <h2 class="monitor-label text-xl font-semibold text-blue-400">SLIDES</h2>
+                 <div class="monitor-content-area"></div>
+                 <button id="prev-slide-btn" class="absolute left-3 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/70 border border-white/50 rounded-full w-12 h-12 flex items-center justify-center text-2xl cursor-pointer">‹</button>
+                 <button id="next-slide-btn" class="absolute right-3 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/70 border border-white/50 rounded-full w-12 h-12 flex items-center justify-center text-2xl cursor-pointer">›</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Data Setup ---
+            const BLACK_SOURCE_ID = 100;
+            const SLIDE_SOURCE_ID = 7; // 'MAC 1' is now the slide deck
+             const slides = [
+                 { 
+                     type: 'title',
+                     title: 'Psalm 119C - How Can the Way of Youth Be Pure?',
+                     subtitle: 'The Psalter 1912, © In this version Praise Trust, CCL No. 87228',
+                     dskText: 'Psalm 119C - How Can the Way of Youth Be Pure?'
+                 },
+                 {
+                     type: 'lyrics',
+                     lines: 'How can the way of youth be pure,<br>what guiding light can wisdom give?<br>Their path, O Lord, shall be secure<br>if by your holy word they live.',
+                     dskText: 'How can the way of youth be pure, what guiding light can wisdom give?'
+                 },
+                 {
+                     type: 'lyrics',
+                     lines: 'With all my heart I seek you, Lord;<br>O let me not from you depart!<br>To guard my steps from sin, your word<br>I safely cherish in my heart.',
+                     dskText: 'With all my heart I seek you, Lord; O let me not from you depart!'
+                 },
+                 {
+                     type: 'lyrics',
+                     lines: 'As those who in their wealth rejoice<br>so is my joy to heed your ways;<br>my ears will listen to your voice,<br>my mind reflect, my mouth give praise.',
+                     dskText: 'As those who in their wealth rejoice so is my joy to heed your ways;'
+                 }
+             ];
+            
+            // --- MODIFIED: Using videoUrl instead of imageUrl ---
+            const baseSources = [
+                { id: 1, name: 'CAM 1', videoUrl: 'https://pub-adee94ef285448cb92694e533292bcb9.r2.dev/CAM%201.mp4' }, 
+                { id: 2, name: 'CAM 2', videoUrl: 'https://pub-adee94ef285448cb92694e533292bcb9.r2.dev/Congregation%20Shot.mp4' }, 
+                { id: 3, name: 'CAM 3', videoUrl: 'https://pub-adee94ef285448cb92694e533292bcb9.r2.dev/CAM%203.mp4' }, 
+                { id: 4, name: 'CAM 4', videoUrl: null },
+                { id: 5, name: 'CAM 5', videoUrl: null }, 
+                { id: 6, name: 'CAM 6', videoUrl: null }, 
+                { id: SLIDE_SOURCE_ID, name: 'MAC 1', videoUrl: null }, 
+            ];
+            const buttonSources = [...baseSources, { id: BLACK_SOURCE_ID, name: 'BLK', videoUrl: null }];
+            const monitorSources = [...baseSources, { id: BLACK_SOURCE_ID, name: 'BLACK', videoUrl: null }];
+
+            // --- State Management ---
+            const state = {
+                program: BLACK_SOURCE_ID,
+                preview: null,
+                slideIndex: 0,
+                isTransitioning: false,
+                transitionStyle: 'mix',
+                isFadedToBlack: false,
+                ftbPreviousProgram: null,
+                dsk1: { onAir: false, source: SLIDE_SOURCE_ID, tieTarget: null },
+                dsk2: { onAir: false, source: SLIDE_SOURCE_ID, tieTarget: null }
+            };
+
+            // --- Element Caching ---
+            const elements = {
+                previewBus: document.getElementById('preview-bus'),
+                programBus: document.getElementById('program-bus'),
+                previewMonitor: document.getElementById('preview-monitor'),
+                programMonitor: document.getElementById('program-monitor'),
+                slideDeckMonitor: document.getElementById('slide-deck-monitor'),
+                cutButton: document.getElementById('cut-btn'),
+                autoButton: document.getElementById('auto-btn'),
+                ftbButton: document.getElementById('ftb-btn'),
+                transitionStyleBus: document.getElementById('transition-style-bus'),
+                tBarHandle: document.getElementById('t-bar-handle'),
+                dsk1TieBtn: document.getElementById('dsk1-tie-btn'),
+                dsk1OnAirBtn: document.getElementById('dsk1-onair-btn'),
+                dsk1AutoBtn: document.getElementById('dsk1-auto-btn'),
+                dsk2TieBtn: document.getElementById('dsk2-tie-btn'),
+                dsk2OnAirBtn: document.getElementById('dsk2-onair-btn'),
+                dsk2AutoBtn: document.getElementById('dsk2-auto-btn'),
+                prevSlideBtn: document.getElementById('prev-slide-btn'),
+                nextSlideBtn: document.getElementById('next-slide-btn'),
+            };
+
+            // --- Initialization ---
+            function initialize() {
+                buttonSources.forEach(source => {
+                    elements.previewBus.appendChild(createButton(source, 'pvw'));
+                    elements.programBus.appendChild(createButton(source, 'pgm'));
+                });
+
+                elements.cutButton.addEventListener('click', performCut);
+                elements.autoButton.addEventListener('click', performAuto);
+                elements.ftbButton.addEventListener('click', performFtb);
+                elements.prevSlideBtn.addEventListener('click', prevSlide);
+                elements.nextSlideBtn.addEventListener('click', nextSlide);
+                
+                // --- NEW: Added keyboard controls for slides ---
+                document.addEventListener('keydown', (e) => {
+                    // Prevent slide changes if user is typing in an input field
+                    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+                        return;
+                    }
+                    if (e.key === 'ArrowLeft') {
+                        prevSlide();
+                    } else if (e.key === 'ArrowRight') {
+                        nextSlide();
+                    }
+                });
+
+                elements.transitionStyleBus.querySelectorAll('.btn-trans-style').forEach(btn => {
+                    btn.addEventListener('click', () => setTransitionStyle(btn.dataset.style));
+                });
+                elements.dsk1TieBtn.addEventListener('click', () => toggleDskTie(1));
+                elements.dsk1OnAirBtn.addEventListener('click', () => toggleDskOnAir(1));
+                elements.dsk1AutoBtn.addEventListener('click', () => performDskAuto(1));
+                elements.dsk2TieBtn.addEventListener('click', () => toggleDskTie(2));
+                elements.dsk2OnAirBtn.addEventListener('click', () => toggleDskOnAir(2));
+                elements.dsk2AutoBtn.addEventListener('click', () => performDskAuto(2));
+                
+                updateUI();
+            }
+
+            function createButton(source, busType) {
+                const btn = document.createElement('button');
+                btn.dataset.sourceId = source.id;
+                btn.textContent = source.name;
+                btn.className = 'bus-btn';
+                if (busType === 'pvw') {
+                    btn.addEventListener('click', () => selectPreview(source.id));
+                } else {
+                    btn.addEventListener('click', () => selectProgramDirectly(source.id));
+                }
+                return btn;
+            }
+
+            // --- Slide Rendering ---
+            function getSlideHTML(slideIndex, isOverlay = false) {
+                const slide = slides[slideIndex];
+                
+                const titleSize = isOverlay ? 'text-2xl md:text-3xl' : 'text-xl md:text-2xl';
+                const subtitleSize = isOverlay ? 'text-lg md:text-xl' : 'text-base md:text-m';
+                const lyricSize = isOverlay ? 'text-3xl md:text-4xl' : 'text-2xl md:text-3xl';
+
+                if (slide.type === 'title') {
+                    return `
+                        <div class="p-8 flex flex-col justify-end items-center text-center h-full">
+                            <h1 class="font-serif ${titleSize} mb-4">${slide.title}</h1>
+                            <p class="${subtitleSize} text-gray-300">${slide.subtitle}</p>
+                        </div>
+                    `;
+                } else if (slide.type === 'lyrics') {
+                    return `
+                        <div class="p-8 flex justify-center items-center h-full">
+                            <p class="font-serif ${lyricSize} leading-snug text-center">${slide.lines}</p>
+                        </div>
+                    `;
+                }
+                return '';
+            }
+
+            // --- Core Logic Functions ---
+            function selectPreview(sourceId) {
+                if (state.isTransitioning || state.isFadedToBlack) return;
+                state.preview = (sourceId === state.program) ? null : sourceId;
+                updateUI();
+            }
+
+            function selectProgramDirectly(sourceId) {
+                if (state.isTransitioning || state.isFadedToBlack) return;
+                state.program = sourceId;
+                if (state.preview === sourceId) state.preview = null;
+                updateUI();
+            }
+
+            // --- MODIFIED: This now calls a more specific update function ---
+            function prevSlide() {
+                state.slideIndex = (state.slideIndex - 1 + slides.length) % slides.length;
+                updateSlideDisplays();
+            }
+
+            // --- MODIFIED: This now calls a more specific update function ---
+            function nextSlide() {
+                state.slideIndex = (state.slideIndex + 1) % slides.length;
+                updateSlideDisplays();
+            }
+            
+            function setTransitionStyle(style) {
+                if (state.isTransitioning) return;
+                state.transitionStyle = style;
+                updateUI();
+            }
+
+            function performCut() {
+                if (state.preview === null || state.isTransitioning || state.isFadedToBlack) return;
+                
+                const oldProgram = state.program;
+                const newProgram = state.preview;
+                
+                state.program = newProgram;
+                state.preview = oldProgram;
+
+                // Handle tied DSKs
+                 [1, 2].forEach(dskNumber => {
+                       const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
+                       if (dsk.tieTarget === 'program') dsk.tieTarget = 'preview';
+                       else if (dsk.tieTarget === 'preview') dsk.tieTarget = 'program';
+                 });
+
+                updateUI();
+            }
+            
+            function performAuto() {
+                 if (state.preview === null || state.isTransitioning || state.isFadedToBlack) return;
+    
+                 state.isTransitioning = true;
+                 elements.autoButton.classList.add('btn-pgm');
+                 
+                 const transitionDuration = 500;
+                 const oldProgramId = state.program;
+                 const newProgramId = state.preview;
+
+                 // Get content areas and DSKs from both monitors
+                 const programContentArea = elements.programMonitor.querySelector('.monitor-content-area');
+                 const previewContentArea = elements.previewMonitor.querySelector('.monitor-content-area');
+                 const programDskOverlays = elements.programMonitor.querySelectorAll('.dsk-overlay');
+
+                 // Create transition overlays for both monitors
+                 const programTransitionOverlay = document.createElement('div');
+                 programTransitionOverlay.className = 'transition-overlay';
+                 elements.programMonitor.appendChild(programTransitionOverlay);
+                 updateElementContent(programTransitionOverlay, getSourceDetails(newProgramId)); // PGM gets new source
+                 
+                 const previewTransitionOverlay = document.createElement('div');
+                 previewTransitionOverlay.className = 'transition-overlay';
+                 elements.previewMonitor.appendChild(previewTransitionOverlay);
+                 updateElementContent(previewTransitionOverlay, getSourceDetails(oldProgramId)); // PVW gets old source
+
+                 // Set initial opacities and transitions for all layers
+                 programTransitionOverlay.style.opacity = 0;
+                 previewTransitionOverlay.style.opacity = 0;
+                 
+                 const transitionCSS = `opacity ${transitionDuration}ms ease-in-out`;
+                 programContentArea.style.transition = transitionCSS;
+                 previewContentArea.style.transition = transitionCSS;
+                 programTransitionOverlay.style.transition = transitionCSS;
+                 previewTransitionOverlay.style.transition = transitionCSS;
+                 programDskOverlays.forEach(dskOverlay => dskOverlay.style.transition = transitionCSS);
+                 
+                 // Animate T-bar
+                 elements.tBarHandle.style.transition = `bottom ${transitionDuration}ms linear`;
+                 elements.tBarHandle.style.bottom = '106px';
+                 
+                 // Handle DSKs tied to preview (fading IN)
+                 [1, 2].forEach(dskNumber => {
+                        const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
+                         if (dsk.onAir && dsk.tieTarget === 'preview') {
+                               const dskOverlayForTransition = createDskOverlay(dskNumber, state.slideIndex);
+                               dskOverlayForTransition.style.opacity = 0;
+                               dskOverlayForTransition.style.transition = transitionCSS;
+                               programTransitionOverlay.appendChild(dskOverlayForTransition); // Add to incoming PGM overlay
+                               setTimeout(() => dskOverlayForTransition.style.opacity = '1', 10);
+                        }
+                 });
+
+                 // Start the crossfade animation
+                 setTimeout(() => {
+                       programContentArea.style.opacity = 0;
+                       previewContentArea.style.opacity = 0;
+                       programDskOverlays.forEach(dskOverlay => dskOverlay.style.opacity = 0);
+                       
+                       programTransitionOverlay.style.opacity = 1;
+                       previewTransitionOverlay.style.opacity = 1;
+                 }, 10);
+
+                 // After transition, update state and cleanup
+                 setTimeout(() => {
+                       state.program = newProgramId;
+                       state.preview = oldProgramId;
+                       
+                       [1, 2].forEach(dskNumber => {
+                             const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
+                             if (dsk.tieTarget === 'program') dsk.tieTarget = 'preview';
+                             else if (dsk.tieTarget === 'preview') dsk.tieTarget = 'program';
+                       });
+
+                       state.isTransitioning = false;
+                       elements.autoButton.classList.remove('btn-pgm');
+                       elements.tBarHandle.style.transition = 'bottom 0.2s linear';
+                       elements.tBarHandle.style.bottom = '0px';
+                       
+                       // Cleanup
+                       programTransitionOverlay.remove();
+                       previewTransitionOverlay.remove();
+                       programContentArea.style.transition = 'none';
+                       programContentArea.style.opacity = 1;
+                       previewContentArea.style.transition = 'none';
+                       previewContentArea.style.opacity = 1;
+                       
+                       updateUI();
+                 }, transitionDuration + 50);
+            }
+
+
+            function performFtb() {
+                if (state.isTransitioning) return;
+                state.isFadedToBlack = !state.isFadedToBlack;
+
+                if (state.isFadedToBlack) {
+                    state.ftbPreviousProgram = state.program;
+                    state.program = BLACK_SOURCE_ID;
+                } else {
+                    state.program = state.ftbPreviousProgram;
+                    state.ftbPreviousProgram = null;
+                }
+                updateUI();
+            }
+
+            function toggleDskTie(dskNumber) {
+                const dskToUpdate = (dskNumber === 1) ? state.dsk1 : state.dsk2;
+                const otherDsk = (dskNumber === 1) ? state.dsk2 : state.dsk1;
+
+                // If a tie is active, we're turning it off
+                if (dskToUpdate.tieTarget) {
+                    const wasTiedToProgram = dskToUpdate.tieTarget === 'program';
+                    dskToUpdate.tieTarget = null;
+
+                    // Only turn off the overlay if it was NOT tied to program
+                    if (!wasTiedToProgram) {
+                        dskToUpdate.onAir = false;
+                    }
+                    
+                    updateUI(true);
+                    return;
+                }
+
+                // Otherwise, we're turning a tie on
+                const isProgramOccupiedByOtherDsk = otherDsk.onAir && otherDsk.tieTarget !== 'preview';
+
+                if (isProgramOccupiedByOtherDsk) {
+                    dskToUpdate.tieTarget = 'preview';
+                } else {
+                    dskToUpdate.tieTarget = 'program';
+                }
+
+                dskToUpdate.onAir = true;
+                updateUI(true);
+            }
+
+            function toggleDskOnAir(dskNumber) {
+                const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
+                dsk.onAir = !dsk.onAir;
+                updateUI(true);
+            }
+
+            function performDskAuto(dskNumber) {
+                const dsk = dskNumber === 1 ? state.dsk1 : state.dsk2;
+                const autoBtn = dskNumber === 1 ? elements.dsk1AutoBtn : elements.dsk2AutoBtn;
+                const onAirBtn = dskNumber === 1 ? elements.dsk1OnAirBtn : elements.dsk2OnAirBtn;
+                if (state.isTransitioning || autoBtn.classList.contains('active')) return;
+
+                const transitionDuration = 300;
+                
+                autoBtn.classList.add('active'); 
+
+                const isTiedToPreview = dsk.tieTarget === 'preview';
+                const contextMonitor = isTiedToPreview ? elements.previewMonitor : elements.programMonitor;
+                
+                const isTurningOn = !dsk.onAir;
+                dsk.onAir = !dsk.onAir;
+
+                if (isTurningOn) {
+                    const targetOverlay = createDskOverlay(dskNumber, state.slideIndex);
+                    contextMonitor.appendChild(targetOverlay);
+                    
+                    targetOverlay.style.opacity = '0';
+                    targetOverlay.style.transition = `opacity ${transitionDuration}ms ease-in-out`;
+                    
+                    if (dsk.tieTarget !== 'preview') {
+                        onAirBtn.classList.add('active');
+                    }
+
+                    setTimeout(() => {
+                        targetOverlay.style.opacity = '1';
+                        setTimeout(() => autoBtn.classList.remove('active'), transitionDuration);
+                    }, 10);
+                } else {
+                    const targetOverlay = contextMonitor.querySelector(`.dsk${dskNumber}-overlay-style`);
+                    if (targetOverlay) {
+                        targetOverlay.style.transition = `opacity ${transitionDuration}ms ease-in-out`;
+                        targetOverlay.style.opacity = '0';
+
+                        onAirBtn.classList.remove('active');
+
+                        setTimeout(() => {
+                            targetOverlay.remove();
+                            autoBtn.classList.remove('active');
+                        }, transitionDuration);
+                    } else {
+                        onAirBtn.classList.remove('active');
+                        autoBtn.classList.remove('active');
+                    }
+                }
+            }
+            
+            // --- UI Update & Helper Functions ---
+            function getSourceDetails(sourceId) {
+                return monitorSources.find(s => s.id === sourceId);
+            }
+
+            // --- REWRITTEN: This function now handles video sources ---
+            function updateElementContent(element, source) {
+                if (!element || !source) return;
+                
+                const contentArea = element.querySelector('.monitor-content-area') || element;
+                
+                // --- Universal Cleanup ---
+                // Clear any previous text/slide content AND remove old video elements
+                contentArea.innerHTML = ''; 
+                // Also clear any background image from the parent element, which is no longer used for videos
+                element.style.backgroundImage = 'none';
+
+                if (source.id === SLIDE_SOURCE_ID) {
+                    // Handle slide deck content
+                    contentArea.innerHTML = getSlideHTML(state.slideIndex, false);
+                } else if (source.videoUrl) {
+                    // --- NEW: Handle Video Sources ---
+                    const video = document.createElement('video');
+                    video.src = source.videoUrl;
+                    video.autoplay = true;     // Start playing automatically
+                    video.loop = true;         // Loop the video
+                    video.muted = true;        // Essential for autoplay in most browsers
+                    video.playsInline = true;  // Important for mobile browsers
+                    video.className = 'w-full h-full object-cover'; // Style to fill the container
+                    
+                    // Append the video to the content area
+                    contentArea.appendChild(video);
+                } else {
+                    // Handle placeholders like BLK or empty camera slots
+                    if (source.name && source.id !== BLACK_SOURCE_ID) {
+                        contentArea.innerHTML = `<p class="text-5xl font-bold">${source.name}</p>`;
+                    }
+                    // For BLACK, the background is already black, so we don't need to add text.
+                }
+            }
+            
+            function createDskOverlay(dskNum, slideIndex) {
+                const overlay = document.createElement('div');
+                overlay.className = `dsk-overlay dsk${dskNum}-overlay-style`;
+                const slide = slides[slideIndex];
+
+                if (dskNum === 1) {
+                    // Only create content if the slide is NOT a lyrics slide
+                    if (slide.type !== 'lyrics') {
+                        let html = getSlideHTML(slideIndex, false); 
+                        html = html.replace('p-8', 'p-2');
+                        html = html.replace('text-3xl md:text-4xl', 'text-3xl md:text-4xl');
+                        html = html.replace('text-xl md:text-2xl', 'text-2xl md:text-3xl');
+                        html = html.replace('text-base md:text-m', 'text-lg md:text-xl');
+                        overlay.innerHTML = html;
+                    }
+                } else if (dskNum === 2) {
+                    if (slide.dskText) {
+                        let html = getSlideHTML(slideIndex, true); 
+                        overlay.innerHTML = html;
+                    }
+                }
+                return overlay;
+            }
+            
+            // --- NEW FUNCTION ---
+            // This function specifically updates only the elements that display slide content,
+            // leaving the main video monitors untouched to prevent restarts.
+            function updateSlideDisplays() {
+                if (state.isTransitioning) return;
+
+                // 1. Update the dedicated slide deck monitor
+                elements.slideDeckMonitor.querySelector('.monitor-content-area').innerHTML = getSlideHTML(state.slideIndex, false);
+
+                // 2. Update any active Downstream Keyer (DSK) overlays
+                [1, 2].forEach(dskNum => {
+                    const dsk = dskNum === 1 ? state.dsk1 : state.dsk2;
+                    const autoBtn = dskNum === 1 ? elements.dsk1AutoBtn : elements.dsk2AutoBtn;
+
+                    if (autoBtn.classList.contains('active')) {
+                        return; // Don't interfere with an active DSK transition
+                    }
+
+                    // Clear existing overlays for this DSK from both main monitors
+                    elements.programMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
+                    elements.previewMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
+                    
+                    const isOnProgram = dsk.onAir && dsk.tieTarget !== 'preview';
+                    const isOnPreview = dsk.onAir && dsk.tieTarget === 'preview';
+
+                    // Re-add overlays if they are active, using the new slide index
+                    if (isOnProgram) {
+                        const overlay = createDskOverlay(dskNum, state.slideIndex);
+                        elements.programMonitor.appendChild(overlay);
+                        overlay.style.opacity = 1;
+                    }
+                    if (isOnPreview) {
+                        const overlay = createDskOverlay(dskNum, state.slideIndex);
+                        elements.previewMonitor.appendChild(overlay);
+                        overlay.style.opacity = 1;
+                    }
+                });
+            }
+
+
+            function updateUI(instantDsk = false) {
+                if (state.isTransitioning) return;
+                
+                // Update Base Monitor Content
+                updateElementContent(elements.programMonitor, getSourceDetails(state.program));
+                updateElementContent(elements.previewMonitor, state.preview !== null ? getSourceDetails(state.preview) : { name: '-', id: -1 });
+                elements.slideDeckMonitor.querySelector('.monitor-content-area').innerHTML = getSlideHTML(state.slideIndex, false);
+
+                // Update Busses
+                updateBus(elements.programBus, state.program, 'btn-pgm');
+                updateBus(elements.previewBus, state.preview, 'btn-pvw');
+                
+                elements.previewBus.querySelectorAll('.bus-btn').forEach(btn => {
+                    const sourceId = parseInt(btn.dataset.sourceId);
+                    btn.disabled = (sourceId === state.program);
+                    btn.style.opacity = btn.disabled ? '0.5' : '1';
+                });
+
+                // Update Other controls
+                elements.transitionStyleBus.querySelectorAll('.btn-trans-style').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.style === state.transitionStyle);
+                });
+                elements.ftbButton.classList.toggle('active', state.isFadedToBlack);
+
+                // DSK UI Logic
+                [1,2].forEach(dskNum => {
+                    const dsk = dskNum === 1 ? state.dsk1 : state.dsk2;
+                    const tieBtn = dskNum === 1 ? elements.dsk1TieBtn : elements.dsk2TieBtn;
+                    const onAirBtn = dskNum === 1 ? elements.dsk1OnAirBtn : elements.dsk2OnAirBtn;
+                    const autoBtn = dskNum === 1 ? elements.dsk1AutoBtn : elements.dsk2AutoBtn;
+
+                    if (autoBtn.classList.contains('active')) {
+                        return;
+                    }
+
+                    elements.programMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
+                    elements.previewMonitor.querySelectorAll(`.dsk${dskNum}-overlay-style`).forEach(el => el.remove());
+                    
+                    const isOnProgram = dsk.onAir && dsk.tieTarget !== 'preview';
+                    const isOnPreview = dsk.onAir && dsk.tieTarget === 'preview';
+
+                    tieBtn.classList.toggle('active-pgm', dsk.tieTarget === 'program');
+                    tieBtn.classList.toggle('active-pvw', dsk.tieTarget === 'preview');
+                    onAirBtn.classList.toggle('active', isOnProgram);
+
+                    if (isOnProgram) {
+                        const overlay = createDskOverlay(dskNum, state.slideIndex);
+                        elements.programMonitor.appendChild(overlay);
+                        if(instantDsk) overlay.style.transition = 'none';
+                        overlay.style.opacity = 1;
+                    }
+                    if (isOnPreview) {
+                        const overlay = createDskOverlay(dskNum, state.slideIndex);
+                        elements.previewMonitor.appendChild(overlay);
+                        if(instantDsk) overlay.style.transition = 'none';
+                        overlay.style.opacity = 1;
+                    }
+                });
+            }
+            
+            function updateBus(busElement, activeSourceId, activeClass) {
+                busElement.querySelectorAll('.bus-btn').forEach(btn => {
+                    const sourceId = parseInt(btn.dataset.sourceId);
+                    btn.classList.toggle(activeClass, sourceId === activeSourceId);
+                });
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+</html>
